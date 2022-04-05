@@ -1,0 +1,9 @@
+{
+  "kty": "EC",
+  "d": "CAXhisdI_b0Mb1HkJVSjbG6TwQvSe0XhwqnzVrFLAt0",
+  "use": "sig",
+  "crv": "P-256",
+  "kid": "ceb5be22-27aa-4331-9acf-fb9a98b643f3",
+  "x": "8dK3Tkol3Gegq7C-BSmEKdZwKaHpm6xGdjn9aW5IzvM",
+  "y": "woMApNBYde-9ahSEV9WDWDmQhSceeDmuPbvixX5tk9M"
+}

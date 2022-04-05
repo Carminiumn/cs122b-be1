@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: IdmService
+  datasource:
+    url: jdbc:mysql://localhost:3306
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+server:
+  address: 0.0.0.0
+  port: 8081
+  error:
+    include-exception: true
+    include-message: always
+
+logging:
+  file:
+    name: ./IdmService.log
+
+idm:
+  key-file-name: ec-key.json
+  access-token-expire: 30m
+  refresh-token-expire: 12h
+  max-refresh-token-life-time: 30d
