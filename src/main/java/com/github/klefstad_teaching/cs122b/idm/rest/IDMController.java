@@ -2,28 +2,26 @@ package com.github.klefstad_teaching.cs122b.idm.rest;
 
 import com.github.klefstad_teaching.cs122b.core.error.ResultError;
 import com.github.klefstad_teaching.cs122b.core.result.IDMResults;
-import com.github.klefstad_teaching.cs122b.core.result.Result;
+import com.github.klefstad_teaching.cs122b.core.security.JWTManager;
 import com.github.klefstad_teaching.cs122b.idm.component.IDMAuthenticationManager;
 import com.github.klefstad_teaching.cs122b.idm.component.IDMJwtManager;
 import com.github.klefstad_teaching.cs122b.idm.model.*;
 import com.github.klefstad_teaching.cs122b.idm.repo.entity.RefreshToken;
 import com.github.klefstad_teaching.cs122b.idm.repo.entity.User;
+import com.github.klefstad_teaching.cs122b.idm.repo.entity.type.TokenStatus;
 import com.github.klefstad_teaching.cs122b.idm.util.Validate;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.proc.BadJOSEException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.text.ParseException;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
 
@@ -93,19 +91,21 @@ public class IDMController
             throw new ResultError(IDMResults.INVALID_CREDENTIALS);
         }
 
-        if (user.getUserStatus().value().equals("Locked")) {
+        else if (user.getUserStatus().value().equals("Locked")) {
             throw new ResultError(IDMResults.USER_IS_LOCKED);
         }
 
-        if (user.getUserStatus().value().equals("Banned")) {
+        else if (user.getUserStatus().value().equals("Banned")) {
             throw new ResultError(IDMResults.USER_IS_BANNED);
         }
 
+        RefreshToken token = jwtManager.buildRefreshToken(user);
+        authManager.insertRefreshToken(token);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(new LoginResponse()
                         .setResult(IDMResults.USER_LOGGED_IN_SUCCESSFULLY)
                         .setAccessToken(jwtManager.buildAccessToken(user))
-                        .setRefreshToken(jwtManager.buildRefreshToken(user).getToken()));
+                        .setRefreshToken(token.getToken()));
     }
 
     @PostMapping("/refresh")
@@ -129,13 +129,51 @@ public class IDMController
             );
         }
         catch (EmptyResultDataAccessException e) {
+            e.printStackTrace();
             throw new ResultError(IDMResults.REFRESH_TOKEN_NOT_FOUND);
         }
 
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(new RefreshResponse()
-                        .setResult(IDMResults.RENEWED_FROM_REFRESH_TOKEN)
-                        .setRefreshToken(request.getRefreshToken()));
+        RefreshToken token = authManager.verifyRefreshToken(request.getRefreshToken());
+        if (token.getTokenStatus().equals(TokenStatus.EXPIRED)) {
+            authManager.expireRefreshToken(token);
+            throw new ResultError(IDMResults.REFRESH_TOKEN_IS_EXPIRED);
+        }
+
+        else if (token.getTokenStatus().equals(TokenStatus.REVOKED)) {
+            authManager.revokeRefreshToken(token);
+            throw new ResultError(IDMResults.REFRESH_TOKEN_IS_REVOKED);
+        }
+
+        else if (Instant.now().isAfter(token.getExpireTime()) ||
+                Instant.now().isAfter(token.getMaxLifeTime())) {
+            authManager.expireRefreshToken(token);
+            throw new ResultError(IDMResults.REFRESH_TOKEN_IS_EXPIRED);
+        }
+
+        jwtManager.updateRefreshTokenExpireTime(token);
+        authManager.updateRefreshTokenExpireTime(token);
+        User user = authManager.getUserFromRefreshToken(token);
+
+        if (token.getExpireTime().isAfter(token.getMaxLifeTime())) {
+            // make new refreshToken
+            authManager.revokeRefreshToken(token);
+            RefreshToken newToken = jwtManager.buildRefreshToken(user);
+            authManager.insertRefreshToken(newToken);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(new RefreshResponse()
+                            .setResult(IDMResults.RENEWED_FROM_REFRESH_TOKEN)
+                            .setAccessToken(jwtManager.buildAccessToken(user))
+                            .setRefreshToken(newToken.getToken()));
+        }
+        else {
+            // return old refreshToken and new accessToken
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(new RefreshResponse()
+                            .setResult(IDMResults.RENEWED_FROM_REFRESH_TOKEN)
+                            .setAccessToken(jwtManager.buildAccessToken(user))
+                            .setRefreshToken(token.getToken()));
+        }
     }
 
     @PostMapping("/authenticate")

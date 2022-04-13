@@ -4,12 +4,14 @@ import com.github.klefstad_teaching.cs122b.core.security.JWTManager;
 import com.github.klefstad_teaching.cs122b.idm.config.IDMServiceConfig;
 import com.github.klefstad_teaching.cs122b.idm.repo.entity.RefreshToken;
 import com.github.klefstad_teaching.cs122b.idm.repo.entity.User;
+import com.github.klefstad_teaching.cs122b.idm.repo.entity.type.TokenStatus;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.token.TokenService;
 import org.springframework.stereotype.Component;
 
 import java.text.ParseException;
@@ -104,6 +106,7 @@ public class IDMJwtManager
         return new RefreshToken()
                 .setToken(generateUUID().toString())
                 .setUserId(user.getId())
+                .setTokenStatus(TokenStatus.ACTIVE)
                 .setExpireTime(
                         Instant.now().plus(jwtManager.getRefreshTokenExpire())
                 )
