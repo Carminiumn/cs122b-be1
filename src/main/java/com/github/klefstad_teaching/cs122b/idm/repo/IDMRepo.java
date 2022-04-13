@@ -7,9 +7,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class IDMRepo
 {
-
+    private NamedParameterJdbcTemplate template;
     @Autowired
     public IDMRepo(NamedParameterJdbcTemplate template)
     {
+        this.template = template;
+    }
+
+    public NamedParameterJdbcTemplate getTemplate() {
+        return template;
     }
 }
